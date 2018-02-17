@@ -2,6 +2,7 @@
 import math
 import pickle
 import numpy as np
+import pandas as pd
 from sklearn.metrics import auc
 
 PRE, REC, SPEC, FPR, NPV, ACC, F1 = 7, 6, 5, 4, 3, 2, 1
@@ -94,6 +95,22 @@ def get_recall(true):
             hit += 1
         recall += [hit / total_true if total_true else 0.0]
     return recall
+
+
+def cut_position(pos, neg, percentage=0):
+    return int(pos["bug"].count() * percentage / 100), int(neg["bug"].count() * percentage / 100)
+
+
+def divide_train_test(pos, neg, cut_pos, cut_neg):
+    data_train = pd.concat([pos.iloc[:cut_pos,:], neg.iloc[:cut_neg,:]],ignore_index=True)
+    data_test = pd.concat([pos.iloc[cut_pos:,:], neg.iloc[cut_neg:,:]], ignore_index=True)
+    return data_train, data_test
+
+
+def split_two(corpus):
+    pos = corpus[corpus['bug']==1]
+    neg = corpus[corpus['bug'] != 1]
+    return {'pos': pos, 'neg': neg}
 
 
 def get_auc(data):
