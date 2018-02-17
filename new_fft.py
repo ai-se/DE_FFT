@@ -2,6 +2,8 @@ import collections
 import pandas as pd
 from helpers import get_performance, get_score, subtotal, get_recall, get_auc
 from sklearn.metrics import auc
+from DE import DE
+
 
 PRE, REC, SPEC, FPR, NPV, ACC, F1 = 7, 6, 5, 4, 3, 2, 1
 MATRIX = "\t".join(["\tTP", "FP", "TN", "FN"])
@@ -10,9 +12,10 @@ PERFORMANCE = " \t".join(["\tCLF", "PRE ", "REC", "SPE", "FPR", "NPV", "ACC", "F
 
 class FFT(object):
 
-    def __init__(self, max_level=1):
-        self.max_depth = max_level - 1
-        cnt = 2 ** self.max_depth
+    def __init__(self, max_level=4, max_depth=4, medianTop=0):
+        self.max_depth = max_depth
+        self.median_top = medianTop
+        cnt = 2 ** (max_level - 1)
         self.tree_cnt = cnt
         self.tree_depths = [0] * cnt
         self.best = -1
@@ -32,6 +35,7 @@ class FFT(object):
         self.predictions = [None] * cnt
         self.loc_aucs = [None] * cnt
         self.print_enabled = True
+        self.results = {}
 
     "Get the loc_auc for a specific tree"
     def get_tree_loc_auc(self, data, i):
@@ -53,14 +57,12 @@ class FFT(object):
 
 
     "Evaluate all tress built on TEST data."
-
     def eval_trees(self):
         for i in range(self.tree_cnt):
             # Get performance on TEST data.
             self.eval_tree(i)
 
     "Evaluate the performance of the given tree on the TEST data."
-
     def eval_tree(self, t_id):
         if self.performance_on_test[t_id]:
             return
@@ -71,6 +73,7 @@ class FFT(object):
         for level in range(depth + 1):
             cue, direction, threshold, decision = self.selected[t_id][level]
             undecided, metrics, loc_auc = self.eval_decision(data, cue, direction, threshold, decision)
+            print(metrics)
             tp, fp, tn, fn = self.update_metrics(level, depth, decision, metrics)
             TP, FP, TN, FN = TP + tp, FP + fp, TN + tn, FN + fn
             if len(undecided) == 0:
@@ -130,7 +133,6 @@ class FFT(object):
         return description
 
     "Given how the decision is made, get the performance for this decision."
-
     def eval_decision(self, data, cue, direction, threshold, decision):
         try:
             if direction == ">":
@@ -162,7 +164,6 @@ class FFT(object):
 
 
     "Given data and the specific tree id, add a 'prediction' column to the dataframe."
-
     def predict(self, data, t_id=-1):
         # predictions = pd.Series([None] * len(data))
         if t_id == -1:
@@ -199,6 +200,7 @@ class FFT(object):
         if len(data) == 0:
             print "?????????????????????? Early Ends ???????????????????????"
             return
+        # print "level, ", level
         self.tree_depths[t_id] = level
         decision = self.structures[t_id][level]
         structure = tuple(self.structures[t_id][:level + 1])
@@ -208,7 +210,10 @@ class FFT(object):
             for cue in list(data):
                 if cue in self.ignore or cue == self.target:
                     continue
-                threshold = data[cue].median()
+                if(self.median_top == 1 and level == 0) or (self.median_top == 0):
+                    threshold = data[cue].median()
+                else:
+                    threshold = data[cue]
                 for direction in "><":
                     undecided, metrics, loc_auc = self.eval_decision(data, cue, direction, threshold, decision)
                     tp, fp, tn, fn = self.update_metrics(level, self.max_depth, decision, metrics)
@@ -273,6 +278,8 @@ class FFT(object):
         self.node_descriptions[t_id][i] += [description]
         dist2heaven = get_score("Dist2Heaven", self.performance_on_test[t_id][:4])
         loc_auc = -self.get_tree_loc_auc(self.test, t_id)
+
+        self.results[t_id] = {"d2h": dist2heaven, "auc": loc_auc}
         if self.print_enabled:
             print self.node_descriptions[t_id][i][1]
             print "\t----- CONFUSION MATRIX -----"
