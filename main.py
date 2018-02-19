@@ -3,7 +3,7 @@ import collections
 import pandas as pd
 
 from helpers import load_obj, save_obj
-from new_fft import FFT
+from new_fft_1 import FFT
 from SOA import SOA
 from plot import plotROC, plotLOC, plot_compare
 
@@ -21,15 +21,18 @@ data = {"@ivy":     ["ivy-1.1.csv", "ivy-1.4.csv", "ivy-2.0.csv"],\
         "@xalan": ["xalan-2.4.csv", "xalan-2.5.csv", "xalan-2.6.csv", "xalan-2.7.csv"], \
         "@xerces": ["xerces-1.2.csv", "xerces-1.3.csv", "xerces-1.4.csv"]
         }
+data = {"@ivy":     ["ivy-1.1.csv", "ivy-1.4.csv", "ivy-2.0.csv"]}
 criterias = ["Accuracy", "Dist2Heaven", "LOC_AUC"] # "Gini", "InfoGain"]
 
 all_data_filepath = os.path.join(data_path, "fixed_NewData_16.pkl")
+all_data = {}
 
-
+'''
 if os.path.exists(all_data_filepath):
     all_data = load_obj(all_data_filepath)
 else:
     all_data = {}
+'''
 
 p_opt_stat = []
 cnts = [collections.defaultdict(int) for _ in xrange(len(criterias))]
@@ -52,7 +55,7 @@ for name, files in data.iteritems():
         all_data[name]["FFT"] = []
         for c, criteria in enumerate(criterias):
             print "\n  ................................ " + criteria + " ................................"
-            fft = FFT(5)
+            fft = FFT(max_level=4, split_method="median", ifan=False)
             fft.criteria = criteria
             fft.data_name = name
             fft.ignore = {"name", "version", 'name.1', 'prediction'}

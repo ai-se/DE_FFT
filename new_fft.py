@@ -11,7 +11,7 @@ PERFORMANCE = " \t".join(["\tCLF", "PRE ", "REC", "SPE", "FPR", "NPV", "ACC", "F
 
 class FFT(object):
 
-    def __init__(self, max_level=1):
+    def __init__(self, max_level=5, split_method="median"):
         self.max_depth = max_level - 1
         cnt = 2 ** self.max_depth
         self.tree_cnt = cnt
@@ -19,7 +19,7 @@ class FFT(object):
         self.best = -1
         self.target = "" # "bug"
         self.ignore = {} # moved to main. # {"name", "version", 'name.1', 'prediction'}
-        self.split_method = "median"
+        self.split_method = split_method
         self.criteria = "Dist2Heaven"
         self.data_name = ''
         self.train, self.test = None, None
@@ -34,6 +34,7 @@ class FFT(object):
         self.predictions = [None] * cnt
         self.loc_aucs = [None] * cnt
         self.print_enabled = True
+        self.results = {}
 
     "Get the loc_auc for a specific tree"
     def get_tree_loc_auc(self, data, i):
@@ -263,12 +264,14 @@ class FFT(object):
         self.tree_depths[t_id] = level
         decision = self.structures[t_id][level]
         structure = tuple(self.structures[t_id][:level + 1])
+        #print(t_id, level, structure)
         cur_selected = self.computed_cache.get(structure, None)
         Y = data.as_matrix(columns=[self.target])
         if not cur_selected:
             for cue in list(data):
                 if cue in self.ignore or cue == self.target:
                     continue
+                print("Data cue: %s" % cue)
                 if self.split_method == "MDLP":
                     mdlp = MDLP()
                     X = data.as_matrix(columns=[cue])
@@ -294,9 +297,12 @@ class FFT(object):
                     continue
                 elif self.split_method == "percentile":
                     thresholds = set(data[cue].quantile([x/20.0 for x in range(1, 20)], interpolation='midpoint'))
+                elif self.split_method == "mean":
+                    thresholds = [data[cue].mean()]
                 else:
                     thresholds = [data[cue].median()]
                 # point split, e.g. median or x% percentiles.
+                #print("Thresholds: %s" % thresholds)
                 for threshold in thresholds:
                     for direction in "><":
                         cur_selected = self.eval_point_split(level, cur_selected, cur_performance, data, cue, direction, threshold, decision)
@@ -346,6 +352,10 @@ class FFT(object):
         self.node_descriptions[t_id][i] += [description]
         dist2heaven = get_score("Dist2Heaven", self.performance_on_test[t_id][:4])
         loc_auc = -self.get_tree_loc_auc(self.test, t_id)
+
+        self.results[t_id] = {"Accuracy": self.performance_on_test[t_id][9],
+                              "Dist2Heaven": dist2heaven, "LOC_AUC": loc_auc}
+
         if self.print_enabled:
             print self.node_descriptions[t_id][i][1]
             print "\t----- CONFUSION MATRIX -----"
