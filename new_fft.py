@@ -1,8 +1,11 @@
 import collections
 import numpy as np
 import pandas as pd
-from helpers import get_performance, get_score, get_auc
-from mdlp.discretization import MDLP
+
+from helpers import get_performance, get_score, subtotal, get_recall, get_auc
+from sklearn.metrics import auc
+from DE import DE
+
 
 PRE, REC, SPEC, FPR, NPV, ACC, F1 = 7, 6, 5, 4, 3, 2, 1
 MATRIX = "\t".join(["\tTP", "FP", "TN", "FN"])
@@ -11,9 +14,10 @@ PERFORMANCE = " \t".join(["\tCLF", "PRE ", "REC", "SPE", "FPR", "NPV", "ACC", "F
 
 class FFT(object):
 
-    def __init__(self, max_level=5, split_method="median"):
-        self.max_depth = max_level - 1
-        cnt = 2 ** self.max_depth
+    def __init__(self, max_level=4, max_depth=4, medianTop=0):
+        self.max_depth = max_depth
+        self.median_top = medianTop
+        cnt = 2 ** (max_level - 1)
         self.tree_cnt = cnt
         self.tree_depths = [0] * cnt
         self.best = -1
@@ -56,14 +60,12 @@ class FFT(object):
 
 
     "Evaluate all tress built on TEST data."
-
     def eval_trees(self):
         for i in range(self.tree_cnt):
             # Get performance on TEST data.
             self.eval_tree(i)
 
     "Evaluate the performance of the given tree on the TEST data."
-
     def eval_tree(self, t_id):
         if self.performance_on_test[t_id]:
             return
@@ -74,6 +76,7 @@ class FFT(object):
         for level in range(depth + 1):
             cue, direction, threshold, decision = self.selected[t_id][level]
             undecided, metrics, loc_auc = self.eval_decision(data, cue, direction, threshold, decision)
+            print(metrics)
             tp, fp, tn, fn = self.update_metrics(level, depth, decision, metrics)
             TP, FP, TN, FN = TP + tp, FP + fp, TN + tn, FN + fn
             if len(undecided) == 0:
@@ -134,7 +137,6 @@ class FFT(object):
         return description
 
     "Given how the decision is made, get the performance for this decision."
-
     def eval_decision(self, data, cue, direction, threshold, decision):
         try:
             if type(threshold) != type(np.ndarray(1)):
@@ -167,7 +169,6 @@ class FFT(object):
         return undecided, map(len, [tp, fp, tn, fn]), loc_auc
 
     "Given data and the specific tree id, add a 'prediction' column to the dataframe."
-
     def predict(self, data, t_id=-1):
         # predictions = pd.Series([None] * len(data))
         if t_id == -1:
@@ -261,6 +262,7 @@ class FFT(object):
         if len(data) == 0:
             print "?????????????????????? Early Ends ???????????????????????"
             return
+        # print "level, ", level
         self.tree_depths[t_id] = level
         decision = self.structures[t_id][level]
         structure = tuple(self.structures[t_id][:level + 1])
@@ -271,42 +273,30 @@ class FFT(object):
             for cue in list(data):
                 if cue in self.ignore or cue == self.target:
                     continue
-                print("Data cue: %s" % cue)
-                if self.split_method == "MDLP":
-                    mdlp = MDLP()
-                    X = data.as_matrix(columns=[cue])
-                    X_disc = mdlp.fit_transform(X, Y)
-                    X_interval = np.asarray(mdlp.cat2intervals(X_disc, 0))
-                    bins = np.unique(X_disc, axis=0)
-                    if len(bins) <= 1:   # MDLP return the whole range as one bin, use median instead.
-                        threshold = data[cue].median()
-                        for direction in "><":
-                            cur_selected = self.eval_point_split(level, cur_selected, cur_performance, data, cue, direction, threshold, decision)
-                        continue
-                    # print ", ".join([cue, str(bins)+" bins"])
-                    for bin in bins:
-                        indexes = np.where(X_disc == bin)[0]
-                        interval = X_interval[indexes]
-                        try:
-                            if len(np.unique(interval, axis=0)) != 1:
-                                print "???????????????????????????????????????????????????"
-                        except:
-                            print 'ha'
-                        interval = interval[0]
-                        cur_selected = self.eval_range_split(level, cur_selected, cur_performance, data, cue, indexes, interval, decision)
-                    continue
-                elif self.split_method == "percentile":
-                    thresholds = set(data[cue].quantile([x/20.0 for x in range(1, 20)], interpolation='midpoint'))
-                elif self.split_method == "mean":
-                    thresholds = [data[cue].mean()]
-                else:
-                    thresholds = [data[cue].median()]
-                # point split, e.g. median or x% percentiles.
-                #print("Thresholds: %s" % thresholds)
-                for threshold in thresholds:
-                    for direction in "><":
-                        cur_selected = self.eval_point_split(level, cur_selected, cur_performance, data, cue, direction, threshold, decision)
 
+                if(self.median_top == 1 and level == 0) or (self.median_top == 0):
+                    threshold = data[cue].median()
+                else:
+                    threshold = data[cue]
+                for direction in "><":
+                    undecided, metrics, loc_auc = self.eval_decision(data, cue, direction, threshold, decision)
+                    tp, fp, tn, fn = self.update_metrics(level, self.max_depth, decision, metrics)
+                    # if the decision lead to no data, punish the score
+                    if sum([tp, fp, tn, fn]) == 0:
+                        score = float('inf')
+                    elif self.criteria == "LOC_AUC":
+                        score = loc_auc
+                    else:
+                        score = get_score(self.criteria, [TP + tp, FP + fp, TN + tn, FN + fn])
+                    # score = get_score(self.criteria, metrics)
+                    # if not cur_selected or metrics[goal] > self.performance_on_train[t_id][level][cur_selected][goal]:
+                    if not cur_selected or score < cur_selected['score']:
+                        cur_selected = {'rule': (cue, direction, threshold, decision), \
+                                        'undecided': undecided, \
+                                        'metrics': [TP + tp, FP + fp, TN + tn, FN + fn], \
+                                        # 'metrics': metrics,
+                                        'score': score}
+                        x = 1
             self.computed_cache[structure] = cur_selected
         self.selected[t_id][level] = cur_selected['rule']
         self.performance_on_train[t_id][level] = cur_selected['metrics'] + get_performance(cur_selected['metrics'])
@@ -353,9 +343,7 @@ class FFT(object):
         dist2heaven = get_score("Dist2Heaven", self.performance_on_test[t_id][:4])
         loc_auc = -self.get_tree_loc_auc(self.test, t_id)
 
-        self.results[t_id] = {"Accuracy": self.performance_on_test[t_id][9],
-                              "Dist2Heaven": dist2heaven, "LOC_AUC": loc_auc}
-
+        self.results[t_id] = {"d2h": dist2heaven, "auc": loc_auc}
         if self.print_enabled:
             print self.node_descriptions[t_id][i][1]
             print "\t----- CONFUSION MATRIX -----"

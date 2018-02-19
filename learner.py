@@ -16,8 +16,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from scores import *
 from helpers import *
-from new_fft_1 import FFT as fastfrugaltree
 import pandas as pd
+import new_fft
 
 recall, precision, specificity, accuracy, f1, g, f2, d2h = 8, 7, 6, 5, 4, 3, 2, 1
 
@@ -51,12 +51,10 @@ def SVM(train_data,train_labels,test_data):
     prediction = model.predict(test_data)
     return prediction
 
-
 def FFT(data_train, data_test):
-    model = fastfrugaltree()
+    model = new_fft.FFT(max_level=5, max_depth=4, medianTop=1)
     model.ignore = {"name", "version", 'name.1', 'prediction'}
     model.target = "bug"
-    model.print_enabled = False
     model.train = data_train
     model.test = data_test
     return model
@@ -114,33 +112,9 @@ def fft_eval(model, data_train, data_test, criteria):
     t_id = fft.find_best_tree()  # find the best tree on TRAIN data
     fft.eval_trees()
     fft.print_tree(t_id)
-    print("Best Tree ID: %s" % t_id)
-    print("%s value: %.3f" % (criteria, fft.results[t_id][criteria]))
-    print("\n\n")
-    return fft.results[t_id][criteria]
+    return fft.results[criteria]
 
 
-def main(*x):
-    l = np.asarray(x)
-    function=l[1]
-    measure=l[2]
-    data=l[3]
-
-    split = split_two(data)
-    pos = split['pos']
-    neg = split['neg']
-
-    ## 20% train and grow
-    cut_pos, cut_neg = cut_position(pos, neg, percentage=80)
-    data_train, data_test = divide_train_test(pos, neg, cut_pos, cut_neg)
-
-    data_train = smote.execute(l[0].values(), samples=data_train.iloc[:, :-1], labels=data_train.iloc[:, -1:])
-
-    lab = [y for x in data_train.iloc[:, -1:].values.tolist() for y in x]
-    prediction=function(data_train.iloc[:, :-1].values, lab, data_test.iloc[:, :-1].values)
-
-    lab = [y for x in data_test.iloc[:, -1:].values.tolist() for y in x]
-    return evaluation(measure, prediction, lab, data_test)
 
 
 

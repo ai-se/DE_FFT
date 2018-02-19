@@ -71,7 +71,6 @@ class DE(object):
 
     def early_termination(self,fitness,*r):
         for x in range(self.GEN):
-            print("Generation: %s" % x)
             trial_generation = []
             for ind in self.cur_gen:
                 v = self._extrapolate(ind)
