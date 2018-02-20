@@ -36,6 +36,7 @@ class FFT(object):
         self.print_enabled = True
         self.ifan = ifan
         self.results = {}
+        self.sorted_cues = []
 
     "Get the loc_auc for a specific tree"
     def get_tree_loc_auc(self, data, i):
@@ -245,12 +246,20 @@ class FFT(object):
                             'undecided': undecided,\
                             'metrics': [TP + tp, FP + fp, TN + tn, FN + fn],\
                             'score': score}
+            self.sorted_cues = [cur_selected].extend(self.sorted_cues)
+        else:
+            direction = "inside" if decision else "outside"
+            new_cue = {'rule': (cue, direction, interval, decision), \
+                            'undecided': undecided, \
+                            'metrics': [TP + tp, FP + fp, TN + tn, FN + fn], \
+                            'score': score}
+            self.sorted_cues.append(new_cue)
         return cur_selected
 
 
     "Grow the t_id_th tree for the level with the given data. Also save its performance on the TRAIN data"
 
-    def grow(self, data, t_id, level, cur_performance, thresholds = {}):
+    def grow(self, data, t_id, level, cur_performance):
         """
         :param data: current data for future tree growth
         :param t_id: tree id
@@ -264,22 +273,15 @@ class FFT(object):
             return
         self.tree_depths[t_id] = level
         decision = self.structures[t_id][level]
-        '''
-        if self.ifan and level > 0:
-            structure = tuple(self.structures[t_id][:level + 1])
-            cur_selected = self.computed_cache.get(tuple(self.structures[t_id][:1]), None)
-            self.computed_cache[structure] = cur_selected
-        else:
-        '''
         structure = tuple(self.structures[t_id][:level + 1])
         cur_selected = self.computed_cache.get(structure, None)
         Y = data.as_matrix(columns=[self.target])
         if not cur_selected:
-            for cue in list(data):
-                if cue in self.ignore or cue == self.target:
-                    continue
-                #print("Data cue: %s" % data[cue])
-                if not self.ifan or level == 0:
+            if not self.ifan or level == 0:
+                for cue in list(data):
+                    if cue in self.ignore or cue == self.target:
+                        continue
+                    #print("Data cue: %s" % data[cue])
                     if self.split_method == "MDLP":
                         mdlp = MDLP()
                         X = data.as_matrix(columns=[cue])
@@ -304,18 +306,21 @@ class FFT(object):
                             cur_selected = self.eval_range_split(level, cur_selected, cur_performance, data, cue, indexes, interval, decision)
                         continue
                     elif self.split_method == "percentile":
-                        thresholds[cue] = set(data[cue].quantile([x/20.0 for x in range(1, 20)], interpolation='midpoint'))
+                        thresholds = set(data[cue].quantile([x/20.0 for x in range(1, 20)], interpolation='midpoint'))
                     elif self.split_method == "mean":
-                        thresholds[cue] = [data[cue].mean()]
+                        thresholds = [data[cue].mean()]
                     else:
-                        thresholds[cue] = [data[cue].median()]
+                        thresholds = [data[cue].median()]
                     # point split, e.g. median or x% percentiles.
                     #print("Thresholds: %s" % thresholds)
-                for threshold in thresholds[cue]:
-                    for direction in "><":
-                        cur_selected = self.eval_point_split(level, cur_selected, cur_performance, data,
-                                                             cue, direction,threshold, decision)
-
+                    for threshold in thresholds:
+                        for direction in "><":
+                            cur_selected = self.eval_point_split(level, cur_selected, cur_performance,
+                                                                 data, cue, direction, threshold, decision)
+            else:
+                if self.sorted_cues:
+                    print("Level: %s" % level)
+                    cur_selected = self.sorted_cues[level]
             self.computed_cache[structure] = cur_selected
         self.selected[t_id][level] = cur_selected['rule']
         self.performance_on_train[t_id][level] = cur_selected['metrics'] + get_performance(cur_selected['metrics'])
