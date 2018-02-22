@@ -30,7 +30,7 @@ data = {"@ivy":     ["ivy-1.1.csv", "ivy-1.4.csv", "ivy-2.0.csv"],\
         "@xerces": ["xerces-1.2.csv", "xerces-1.3.csv", "xerces-1.4.csv"]
         }
 learners_para_dic = OrderedDict([("max_level", 1), ("split_method", 1), ("ifan", 1)])
-learners_para_bounds=[(4, 5), ("mean", "median", "MDLP", "percentile"), (False, True)]
+learners_para_bounds=[(3, 4, 5), ("mean", "median", "MDLP", "percentile"), (False, True)]
 learners_para_categories=["categorical", "categorical", "categorical"]
 learners=[DT, RF, SVM, NB, KNN, LR]
 measures=["Accuracy", "Dist2Heaven", "LOC_AUC"]
@@ -69,7 +69,8 @@ def de_fft(res=''):
                 de = DE(GEN=3, Goal="Min", termination="Early")
                 v, pareto = de.solve(fft_process, OrderedDict(learners_para_dic),
                                      learners_para_bounds, learners_para_categories, FFT, x, train_df)
-                val = fft_eval(FFT, train_df, test_df, x)
+                params = v.ind
+                val = fft_eval(FFT, train_df, test_df, x, params.values())
                 l.append(val)
                 l1.append(v.ind)
             else:
@@ -77,7 +78,8 @@ def de_fft(res=''):
                 de = DE(GEN=3, Goal="Max", termination="Early")
                 v, pareto = de.solve(fft_process, OrderedDict(learners_para_dic),
                                      learners_para_bounds, learners_para_categories, FFT, x, train_df)
-                val = fft_eval(FFT, train_df, test_df, x)
+                params = v.ind
+                val = fft_eval(FFT, train_df, test_df, x, params.values())
                 l.append(val)
                 l1.append(v.ind)
 
@@ -90,5 +92,8 @@ def de_fft(res=''):
 
 
 if __name__ == '__main__':
+    '''
     for dataset in data:
         de_fft(dataset)
+    '''
+    de_fft("@ivy")
