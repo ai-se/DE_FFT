@@ -11,9 +11,10 @@ PERFORMANCE = " \t".join(["\tCLF", "PRE ", "REC", "SPE", "FPR", "NPV", "ACC", "F
 
 class FFT(object):
 
-    def __init__(self, max_level=5, split_method="mean", ifan=True):
-        self.max_depth = max_level - 1
-        cnt = 2 ** self.max_depth
+    def __init__(self, max_level=5, max_depth=4, split_method="mean", ifan=True):
+        self.max_depth = max_depth
+        self.max_level = max_level - 1
+        cnt = 2 ** (max_level-1)
         self.tree_cnt = cnt
         self.tree_depths = [0] * cnt
         self.best = -1
@@ -83,6 +84,11 @@ class FFT(object):
             data = undecided
         pre, rec, spec, fpr, npv, acc, f1 = get_performance([TP, FP, TN, FN])
         self.performance_on_test[t_id] = [TP, FP, TN, FN, pre, rec, spec, fpr, npv, acc, f1]
+        dist2heaven = get_score("Dist2Heaven", self.performance_on_test[t_id][:4])
+        loc_auc = -self.get_tree_loc_auc(self.test, t_id)
+
+        self.results[t_id] = {"Accuracy": self.performance_on_test[t_id][9],
+                              "Dist2Heaven": dist2heaven, "LOC_AUC": loc_auc}
 
     "Find the best tree based on the score in TRAIN data."
 
@@ -282,7 +288,7 @@ class FFT(object):
         :param level: level id
         :return: None
         """
-        if level >= self.max_depth:
+        if level >= self.max_level:
             return
         if len(data) == 0:
             print "?????????????????????? Early Ends ???????????????????????"
@@ -374,11 +380,7 @@ class FFT(object):
                 data = undecided
         description = self.describe_decision(t_id, i, metrics, reversed=True)
         self.node_descriptions[t_id][i] += [description]
-        dist2heaven = get_score("Dist2Heaven", self.performance_on_test[t_id][:4])
-        loc_auc = -self.get_tree_loc_auc(self.test, t_id)
 
-        self.results[t_id] = {"Accuracy": self.performance_on_test[t_id][9],
-                              "Dist2Heaven": dist2heaven, "LOC_AUC": loc_auc}
 
         if self.print_enabled:
             print self.node_descriptions[t_id][i][1]
@@ -406,7 +408,7 @@ class FFT(object):
         if self.max_depth < 0:
             return []
         ans = []
-        dfs([], self.max_depth)
+        dfs([], self.max_level)
         return ans
 
     "Update the metrics(TP, FP, TN, FN) based on the decision."
