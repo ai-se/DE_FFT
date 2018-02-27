@@ -29,12 +29,12 @@ data = {"@ivy":     ["ivy-1.1.csv", "ivy-1.4.csv", "ivy-2.0.csv"],\
         "@xalan": ["xalan-2.4.csv", "xalan-2.5.csv", "xalan-2.6.csv", "xalan-2.7.csv"], \
         "@xerces": ["xerces-1.2.csv", "xerces-1.3.csv", "xerces-1.4.csv"]
         }
-learners_para_dic = OrderedDict([("max_level", 1), ("split_method", 1), ("ifan", 1)])
-learners_para_bounds=[(3, 4, 5), ("mean", "median", "MDLP", "percentile"), (False, True)]
-learners_para_categories=["categorical", "categorical", "categorical"]
+learners_para_dic = OrderedDict([("max_level", 1), ("max_depth", 1),  ("split_method", 1), ("ifan", 1)])
+learners_para_bounds=[(4, 5), (3, 10), ("mean", "median", "MDLP", "percentile"), (False, True)]
+learners_para_categories=["categorical", "integer", "categorical", "categorical"]
 learners=[DT, RF, SVM, NB, KNN, LR]
-measures=["Accuracy", "Dist2Heaven", "LOC_AUC"]
-repeats=2
+measures=["Dist2Heaven"] #"Accuracy", "LOC_AUC",
+repeats=1
 
 
 def de_fft(res=''):
