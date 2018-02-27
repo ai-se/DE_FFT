@@ -53,7 +53,7 @@ def SVM(train_data,train_labels,test_data):
 
 def FFT(data_train, data_test, params):
     if params:
-        model = fastfrugaltree(max_level=params[0], split_method=params[1], ifan=params[2])
+        model = fastfrugaltree(max_level=params[0], max_depth=params[1], split_method=params[2], ifan=params[3])
     else:
         model = fastfrugaltree()
     model.ignore = {"name", "version", 'name.1', 'prediction'}
@@ -122,7 +122,7 @@ def fft_eval(model, data_train, data_test, criteria, params):
     fft.criteria = criteria
     fft.build_trees()  # build and get performance on TRAIN data
     t_id = fft.find_best_tree()  # find the best tree on TRAIN data
-    fft.eval_trees()
+    fft.eval_tree(t_id)
     fft.print_tree(t_id)
     print("Best Tree ID: %s" % t_id)
     print("%s value: %.3f" % (criteria, fft.results[t_id][criteria]))
